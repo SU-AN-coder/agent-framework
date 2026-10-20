@@ -123,7 +123,14 @@ class CreateConversationExecutor(DeclarativeActionExecutor):
 
 
 class SetTextVariableExecutor(DeclarativeActionExecutor):
-    """Executor for the SetTextVariable action."""
+    """Executor for the SetTextVariable action.
+
+    The text is authored in ``value`` (``text`` remains a supported alias).
+    Authored text starting with ``=`` is evaluated and its result is assigned.
+    Other authored text supports ``{Variable.Path}`` template interpolation, the
+    same way ``SendActivityExecutor`` formats its activity. Expression results are
+    not interpolated again.
+    """
 
     @handler
     async def handle_action(
@@ -135,10 +142,11 @@ class SetTextVariableExecutor(DeclarativeActionExecutor):
         state = await self._ensure_state_initialized(ctx, trigger)
 
         path = _get_variable_path(self._action_def)
-        text = self._action_def.get("text", "")
+        raw_text = self._action_def.get("value", self._action_def.get("text", ""))
+        text = str(raw_text) if raw_text is not None else ""
 
         if path:
-            evaluated_text = state.eval_if_expression(text)
+            evaluated_text = state.eval_if_expression(text) if text.startswith("=") else state.interpolate_string(text)
             state.set(path, str(evaluated_text) if evaluated_text is not None else "")
 
         await ctx.send_message(ActionComplete())

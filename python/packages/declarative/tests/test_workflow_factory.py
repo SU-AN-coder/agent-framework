@@ -392,6 +392,49 @@ actions:
         assert "from variable" in saved
 
 
+class TestWorkflowFactorySetTextVariable:
+    """SetTextVariable's 'value' key and template formatting through a real factory run."""
+
+    @pytest.mark.parametrize("key", ["value", "text"], ids=["value", "text-alias"])
+    async def test_authored_text_is_read_and_template_is_formatted(self, key: str) -> None:
+        """Regression test for #9487: 'value' is read, and '{Local.x}' is filled the way .NET does."""
+        workflow = WorkflowFactory().create_workflow_from_yaml(f"""
+name: set-text-variable-{key}
+actions:
+  - kind: SetValue
+    path: Local.name
+    value: World
+  - kind: SetTextVariable
+    variable: Local.greeting
+    {key}: "Hello {{Local.name}}!"
+  - kind: SendActivity
+    activity: "greeting=[{{Local.greeting}}]"
+""")
+        result = await workflow.run({})
+
+        assert result.get_outputs() == ["greeting=[Hello World!]"]
+
+    async def test_multi_line_value_is_formatted_line_by_line(self) -> None:
+        """The '|-' block form used by declarative-agents/workflow-samples/DeepResearch.yaml keeps its layout."""
+        workflow = WorkflowFactory().create_workflow_from_yaml("""
+name: set-text-variable-block
+actions:
+  - kind: SetValue
+    path: Local.name
+    value: World
+  - kind: SetTextVariable
+    variable: Local.instructions
+    value: |-
+      TASK
+      {Local.name}
+  - kind: SendActivity
+    activity: "task=[{Local.instructions}]"
+""")
+        result = await workflow.run({})
+
+        assert result.get_outputs() == ["task=[TASK\nWorld]"]
+
+
 @_requires_powerfx
 class TestWorkflowFactoryExecution:
     """Tests for workflow execution."""
